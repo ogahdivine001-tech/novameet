@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: 247 248 252;
+  --color-surface: 255 255 255;
+  --color-border: 228 231 240;
+  --color-text-primary: 15 23 42;
+  --color-text-secondary: 100 116 139;
+  --color-primary: 79 70 229;
+  --color-primary-hover: 67 56 202;
+  --color-accent: 99 102 241;
+}
+
+.dark {
+  --color-bg: 11 17 32;
+  --color-surface: 17 24 42;
+  --color-border: 30 41 63;
+  --color-text-primary: 241 245 249;
+  --color-text-secondary: 148 163 184;
+  --color-primary: 99 102 241;
+  --color-primary-hover: 129 140 248;
+  --color-accent: 129 140 248;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: rgb(var(--color-bg));
+  color: rgb(var(--color-text-primary));
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-text-secondary));
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: rgb(var(--color-primary));
+  color: white;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: rgb(var(--color-primary-hover));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.btn-secondary {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text-primary));
+  border: 1px solid rgb(var(--color-border));
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: rgb(var(--color-text-secondary));
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text-primary));
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.card {
+  background-color: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(var(--color-border));
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text-primary));
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.input-field::placeholder {
+  color: rgb(var(--color-text-secondary));
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--color-border) / 0.6) 25%,
+    rgb(var(--color-border) / 0.9) 37%,
+    rgb(var(--color-border) / 0.6) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
