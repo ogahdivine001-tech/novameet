@@ -2,22 +2,26 @@ import { useState, useRef, useCallback, useEffect } from "react";
 
 const ICE_SERVERS = {
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.relay.metered.ca:80" },
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject",
+      urls: "turn:global.relay.metered.ca:80",
+      username: "9780787d8bcf31639e97d546",
+      credential: "tpo75pAjUOP6Vkg9",
     },
     {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject",
+      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "9780787d8bcf31639e97d546",
+      credential: "tpo75pAjUOP6Vkg9",
     },
     {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject",
+      urls: "turn:global.relay.metered.ca:443",
+      username: "9780787d8bcf31639e97d546",
+      credential: "tpo75pAjUOP6Vkg9",
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "9780787d8bcf31639e97d546",
+      credential: "tpo75pAjUOP6Vkg9",
     },
   ],
 };
