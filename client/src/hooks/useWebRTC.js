@@ -23,6 +23,25 @@ const ICE_SERVERS = {
       username: "9780787d8bcf31639e97d546",
       credential: "tpo75pAjUOP6Vkg9",
     },
+    // Free public TURN relay (no signup, no card, no quota tied to an
+    // account) used as an additional fallback path alongside the
+    // dedicated Metered credentials above, in case that quota is
+    // exhausted or the service is briefly unreachable.
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
   ],
 };
 
@@ -206,13 +225,45 @@ const useWebRTC = (socketRef) => {
   }, []);
 
   // ---------- Media controls ----------
-  const toggleMic = useCallback(() => {
+  const toggleMic = useCallback(async () => {
     if (!localStreamRef.current) return;
-    const audioTracks = localStreamRef.current.getAudioTracks();
+    let audioTrack = localStreamRef.current.getAudioTracks()[0];
+
+    // If the browser/OS killed the mic track (common after the tab loses
+    // focus on mobile, or another app briefly grabs the mic), re-acquire a
+    // fresh one instead of silently failing to toggle.
+    if (!audioTrack || audioTrack.readyState === "ended") {
+      try {
+        const freshStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const freshTrack = freshStream.getAudioTracks()[0];
+        if (audioTrack) {
+          localStreamRef.current.removeTrack(audioTrack);
+        }
+        localStreamRef.current.addTrack(freshTrack);
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+
+        Object.values(peerConnectionsRef.current).forEach((pc) => {
+          const sender = pc
+            .getSenders()
+            .find((s) => s.track && s.track.kind === "audio");
+          if (sender) {
+            sender.replaceTrack(freshTrack);
+          } else {
+            pc.addTrack(freshTrack, localStreamRef.current);
+          }
+        });
+
+        audioTrack = freshTrack;
+      } catch (error) {
+        console.error("Could not re-acquire microphone:", error);
+        return;
+      }
+    }
+
     const newState = !micOn;
-    audioTracks.forEach((track) => {
-      track.enabled = newState;
-    });
+    audioTrack.enabled = newState;
     setMicOn(newState);
     socketRef.current?.emit("toggle-mic", { micOn: newState });
   }, [micOn, socketRef]);
@@ -225,13 +276,45 @@ const useWebRTC = (socketRef) => {
     setMicOn(false);
   }, []);
 
-  const toggleCamera = useCallback(() => {
+  const toggleCamera = useCallback(async () => {
     if (!localStreamRef.current) return;
-    const videoTracks = localStreamRef.current.getVideoTracks();
+    let videoTrack = localStreamRef.current.getVideoTracks()[0];
+
+    // Same self-healing behavior as toggleMic: if the camera track died,
+    // re-acquire it instead of getting stuck unable to toggle back on.
+    if (!videoTrack || videoTrack.readyState === "ended") {
+      try {
+        const freshStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        const freshTrack = freshStream.getVideoTracks()[0];
+        if (videoTrack) {
+          localStreamRef.current.removeTrack(videoTrack);
+        }
+        localStreamRef.current.addTrack(freshTrack);
+        cameraTrackRef.current = freshTrack;
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+
+        Object.values(peerConnectionsRef.current).forEach((pc) => {
+          const sender = pc
+            .getSenders()
+            .find((s) => s.track && s.track.kind === "video");
+          if (sender) {
+            sender.replaceTrack(freshTrack);
+          } else {
+            pc.addTrack(freshTrack, localStreamRef.current);
+          }
+        });
+
+        videoTrack = freshTrack;
+      } catch (error) {
+        console.error("Could not re-acquire camera:", error);
+        return;
+      }
+    }
+
     const newState = !cameraOn;
-    videoTracks.forEach((track) => {
-      track.enabled = newState;
-    });
+    videoTrack.enabled = newState;
     setCameraOn(newState);
     socketRef.current?.emit("toggle-camera", { cameraOn: newState });
   }, [cameraOn, socketRef]);
@@ -355,3 +438,4 @@ const useWebRTC = (socketRef) => {
 };
 
 export default useWebRTC;
+s;
