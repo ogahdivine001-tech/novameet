@@ -19,9 +19,13 @@ const ParticipantCard = ({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      // Some browsers (especially on mobile) don't automatically resume
+      // playback after srcObject is reassigned or the track's enabled
+      // state changes, so explicitly (re)request playback as a safety net.
       videoRef.current.play().catch(() => {
-        // Autoplay can be blocked before any user gesture; safe to ignore
-        // since the user already interacted with the page to join.
+        // Autoplay can be blocked before any user gesture; this is safe
+        // to ignore since the user has already interacted with the page
+        // to get into the meeting in the first place.
       });
     }
   }, [stream]);
@@ -34,6 +38,9 @@ const ParticipantCard = ({
         isSpeaking ? "ring-2 ring-nova-500" : ""
       }`}
     >
+      {/* The <video> element stays mounted at all times so its audio track
+          keeps playing even when the camera is off. Visibility of the
+          video image itself is controlled with CSS, not by unmounting it. */}
       <video
         ref={videoRef}
         autoPlay
