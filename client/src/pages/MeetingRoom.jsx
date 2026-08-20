@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   HiVideoCamera,
   HiUsers,
@@ -21,6 +21,7 @@ import { formatElapsed } from "../utils/formatDate";
 const MeetingRoom = () => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { socketRef, connected, emit } = useSocket();
   const {
@@ -90,7 +91,8 @@ const MeetingRoom = () => {
   );
 
   useEffect(() => {
-    attemptJoin();
+    attemptJoin(location.state?.password);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptJoin]);
 
   // Step 2: Get local media once REST join succeeds
@@ -114,7 +116,26 @@ const MeetingRoom = () => {
     // so clear them before rejoining and re-negotiating fresh connections.
     closeAllPeerConnections();
 
+    let settled = false;
+
+    // If the server never acknowledges the join (e.g. it's still waking up
+    // from an idle spin-down, or the request silently dropped), fail
+    // visibly after a reasonable wait instead of freezing on the loading
+    // screen indefinitely.
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setErrorMessage(
+        "Taking too long to connect to the meeting room. The server may be waking up from idle — please try again in a moment.",
+      );
+      setPhase("error");
+    }, 20000);
+
     emit("join-meeting", { meetingId }, (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+
       if (!res?.success) {
         setErrorMessage(
           res?.message || "Could not connect to the meeting room",
@@ -133,6 +154,11 @@ const MeetingRoom = () => {
 
       setPhase("active");
     });
+
+    return () => {
+      settled = true;
+      clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
@@ -356,12 +382,18 @@ const MeetingRoom = () => {
     );
   }
 
-  if (phase === "media" || phase === "connecting") {
+  if (phase === "media") {
     return (
       <LoadingSpinner
         fullScreen
         label="Setting up your camera and microphone..."
       />
+    );
+  }
+
+  if (phase === "connecting") {
+    return (
+      <LoadingSpinner fullScreen label="Connecting to the meeting room..." />
     );
   }
 
