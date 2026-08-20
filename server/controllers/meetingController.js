@@ -1,7 +1,7 @@
-const bcrypt = require('bcryptjs');
-const Meeting = require('../models/Meeting');
-const MeetingParticipant = require('../models/MeetingParticipant');
-const generateMeetingId = require('../utils/generateMeetingId');
+const bcrypt = require("bcryptjs");
+const Meeting = require("../models/Meeting");
+const MeetingParticipant = require("../models/MeetingParticipant");
+const generateMeetingId = require("../utils/generateMeetingId");
 
 // @desc    Create a new meeting
 // @route   POST /api/meetings
@@ -21,7 +21,7 @@ const createMeeting = async (req, res, next) => {
     if (!title) {
       return res.status(400).json({
         success: false,
-        message: 'Meeting title is required',
+        message: "Meeting title is required",
       });
     }
 
@@ -37,7 +37,7 @@ const createMeeting = async (req, res, next) => {
     if (exists) {
       return res.status(500).json({
         success: false,
-        message: 'Could not generate a unique meeting ID, please try again',
+        message: "Could not generate a unique meeting ID, please try again",
       });
     }
 
@@ -47,18 +47,18 @@ const createMeeting = async (req, res, next) => {
       hashedPassword = await bcrypt.hash(password, salt);
     }
 
-    const isScheduled = meetingType === 'scheduled';
+    const isScheduled = meetingType === "scheduled";
 
     const meeting = await Meeting.create({
       title,
-      description: description || '',
+      description: description || "",
       meetingId,
       password: hashedPassword,
       host: req.user._id,
-      meetingType: isScheduled ? 'scheduled' : 'instant',
+      meetingType: isScheduled ? "scheduled" : "instant",
       scheduledAt: isScheduled && scheduledAt ? new Date(scheduledAt) : null,
       duration: duration || 60,
-      status: isScheduled ? 'scheduled' : 'active',
+      status: isScheduled ? "scheduled" : "active",
       waitingRoom: !!waitingRoom,
       startedAt: isScheduled ? null : new Date(),
       participants: [req.user._id],
@@ -66,7 +66,7 @@ const createMeeting = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Meeting created successfully',
+      message: "Meeting created successfully",
       meeting: {
         id: meeting._id,
         title: meeting.title,
@@ -94,7 +94,7 @@ const getMeetings = async (req, res, next) => {
   try {
     const meetings = await Meeting.find({ host: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('host', 'name email avatar');
+      .populate("host", "name email avatar");
 
     res.status(200).json({
       success: true,
@@ -113,10 +113,10 @@ const getUpcomingMeetings = async (req, res, next) => {
   try {
     const meetings = await Meeting.find({
       host: req.user._id,
-      status: { $in: ['scheduled', 'active'] },
+      status: { $in: ["scheduled", "active"] },
     })
       .sort({ scheduledAt: 1, createdAt: -1 })
-      .populate('host', 'name email avatar');
+      .populate("host", "name email avatar");
 
     res.status(200).json({
       success: true,
@@ -135,11 +135,11 @@ const getMeetingHistory = async (req, res, next) => {
   try {
     const meetings = await Meeting.find({
       $or: [{ host: req.user._id }, { participants: req.user._id }],
-      status: { $in: ['ended', 'cancelled'] },
+      status: { $in: ["ended", "cancelled"] },
     })
       .sort({ endedAt: -1, createdAt: -1 })
-      .populate('host', 'name email avatar')
-      .populate('participants', 'name email avatar');
+      .populate("host", "name email avatar")
+      .populate("participants", "name email avatar");
 
     res.status(200).json({
       success: true,
@@ -157,13 +157,13 @@ const getMeetingHistory = async (req, res, next) => {
 const getMeetingById = async (req, res, next) => {
   try {
     const meeting = await Meeting.findById(req.params.id)
-      .populate('host', 'name email avatar')
-      .populate('participants', 'name email avatar');
+      .populate("host", "name email avatar")
+      .populate("participants", "name email avatar");
 
     if (!meeting) {
       return res.status(404).json({
         success: false,
-        message: 'Meeting not found',
+        message: "Meeting not found",
       });
     }
 
@@ -190,43 +190,51 @@ const joinMeeting = async (req, res, next) => {
     const meetingCode = req.params.id.toUpperCase();
 
     const meeting = await Meeting.findOne({ meetingId: meetingCode }).select(
-      '+password'
+      "+password",
     );
 
     if (!meeting) {
       return res.status(404).json({
         success: false,
-        message: 'Meeting not found. Please check the meeting ID.',
+        message: "Meeting not found. Please check the meeting ID.",
       });
     }
 
-    if (meeting.status === 'ended' || meeting.status === 'cancelled') {
+    if (meeting.status === "ended" || meeting.status === "cancelled") {
       return res.status(400).json({
         success: false,
-        message: 'This meeting has already ended',
+        message: "This meeting has already ended",
       });
     }
 
     if (meeting.locked) {
       return res.status(403).json({
         success: false,
-        message: 'This meeting is locked by the host',
+        message: "This meeting is locked by the host",
       });
     }
 
-    if (meeting.password) {
+    const isHost = meeting.host.toString() === req.user._id.toString();
+
+    // The host already knows/set the password, so they shouldn't be
+    // required to re-enter it just to join their own meeting.
+    if (meeting.password && !isHost) {
       if (!password) {
-        return res.status(401).json({
+        // Use 400, not 401: 401 is reserved for authentication/session
+        // issues and is intercepted globally on the frontend to force a
+        // logout + redirect to login, which is wrong for a "this meeting
+        // needs a password" business response.
+        return res.status(400).json({
           success: false,
-          message: 'This meeting requires a password',
+          message: "This meeting requires a password",
           requiresPassword: true,
         });
       }
       const isMatch = await bcrypt.compare(password, meeting.password);
       if (!isMatch) {
-        return res.status(401).json({
+        return res.status(400).json({
           success: false,
-          message: 'Incorrect meeting password',
+          message: "Incorrect meeting password",
           requiresPassword: true,
         });
       }
@@ -236,8 +244,8 @@ const joinMeeting = async (req, res, next) => {
       meeting.participants.push(req.user._id);
     }
 
-    if (meeting.status === 'scheduled') {
-      meeting.status = 'active';
+    if (meeting.status === "scheduled") {
+      meeting.status = "active";
       meeting.startedAt = new Date();
     }
 
@@ -258,7 +266,7 @@ const joinMeeting = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Joined meeting successfully',
+      message: "Joined meeting successfully",
       meeting: {
         id: meeting._id,
         title: meeting.title,
@@ -285,29 +293,29 @@ const endMeeting = async (req, res, next) => {
     if (!meeting) {
       return res.status(404).json({
         success: false,
-        message: 'Meeting not found',
+        message: "Meeting not found",
       });
     }
 
     if (meeting.host.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Only the host can end this meeting',
+        message: "Only the host can end this meeting",
       });
     }
 
-    meeting.status = 'ended';
+    meeting.status = "ended";
     meeting.endedAt = new Date();
     await meeting.save();
 
     await MeetingParticipant.updateMany(
       { meeting: meeting._id, leftAt: null },
-      { $set: { leftAt: new Date() } }
+      { $set: { leftAt: new Date() } },
     );
 
     res.status(200).json({
       success: true,
-      message: 'Meeting ended successfully',
+      message: "Meeting ended successfully",
     });
   } catch (error) {
     next(error);
@@ -324,14 +332,14 @@ const deleteMeeting = async (req, res, next) => {
     if (!meeting) {
       return res.status(404).json({
         success: false,
-        message: 'Meeting not found',
+        message: "Meeting not found",
       });
     }
 
     if (meeting.host.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Only the host can delete this meeting',
+        message: "Only the host can delete this meeting",
       });
     }
 
@@ -340,7 +348,7 @@ const deleteMeeting = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Meeting deleted successfully',
+      message: "Meeting deleted successfully",
     });
   } catch (error) {
     next(error);
