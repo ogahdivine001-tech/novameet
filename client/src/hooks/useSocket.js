@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { io } from 'socket.io-client';
-import { SOCKET_URL, TOKEN_KEY } from '../utils/constants';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { io } from "socket.io-client";
+import { SOCKET_URL, TOKEN_KEY } from "../utils/constants";
 
 /**
  * Manages a Socket.IO connection scoped to the lifetime of the component
@@ -16,14 +16,21 @@ const useSocket = () => {
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      transports: ["websocket", "polling"],
+      // Retry persistently rather than giving up quickly: free-tier hosts
+      // (e.g. Render) can take 30-50s to wake from an idle spin-down, and
+      // mobile networks can have brief drops that recover on their own.
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     });
 
     socketRef.current = socket;
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on("connect", () => setConnected(true));
+    socket.on("disconnect", () => setConnected(false));
 
     return () => {
       socket.disconnect();

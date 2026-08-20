@@ -1,16 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { HiVideoCamera, HiUsers, HiClock, HiX, HiLockClosed } from 'react-icons/hi';
-import VideoGrid from '../components/VideoGrid';
-import MeetingControls from '../components/MeetingControls';
-import ChatPanel from '../components/ChatPanel';
-import ParticipantsPanel from '../components/ParticipantsPanel';
-import LoadingSpinner from '../components/LoadingSpinner';
-import useAuth from '../hooks/useAuth';
-import useSocket from '../hooks/useSocket';
-import useWebRTC from '../hooks/useWebRTC';
-import meetingService from '../services/meetingService';
-import { formatElapsed } from '../utils/formatDate';
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  HiVideoCamera,
+  HiUsers,
+  HiClock,
+  HiX,
+  HiLockClosed,
+} from "react-icons/hi";
+import VideoGrid from "../components/VideoGrid";
+import MeetingControls from "../components/MeetingControls";
+import ChatPanel from "../components/ChatPanel";
+import ParticipantsPanel from "../components/ParticipantsPanel";
+import LoadingSpinner from "../components/LoadingSpinner";
+import useAuth from "../hooks/useAuth";
+import useSocket from "../hooks/useSocket";
+import useWebRTC from "../hooks/useWebRTC";
+import meetingService from "../services/meetingService";
+import { formatElapsed } from "../utils/formatDate";
 
 const MeetingRoom = () => {
   const { meetingId } = useParams();
@@ -44,14 +50,12 @@ const MeetingRoom = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [phase, setPhase] = useState('loading'); // loading | password | joining | active | error | ended
-  const [passwordInput, setPasswordInput] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [phase, setPhase] = useState("loading"); // loading | password | joining | active | error | ended
+  const [passwordInput, setPasswordInput] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [joinedAt] = useState(new Date());
-  const [elapsed, setElapsed] = useState('00:00');
+  const [elapsed, setElapsed] = useState("00:00");
   const [isHost, setIsHost] = useState(false);
-
-  const hasJoinedSocketRoom = useRef(false);
 
   // Elapsed timer
   useEffect(() => {
@@ -64,25 +68,25 @@ const MeetingRoom = () => {
   // Step 1: Validate/join meeting via REST API
   const attemptJoin = useCallback(
     async (password) => {
-      setPhase('joining');
-      setErrorMessage('');
+      setPhase("joining");
+      setErrorMessage("");
       try {
         const res = await meetingService.joinMeeting(meetingId, password);
         setMeetingInfo(res.meeting);
         setIsHost(res.meeting.isHost);
-        setPhase('media');
+        setPhase("media");
       } catch (err) {
         const data = err.response?.data;
         if (data?.requiresPassword) {
-          setPhase('password');
-          setErrorMessage(data.message || 'This meeting requires a password');
+          setPhase("password");
+          setErrorMessage(data.message || "This meeting requires a password");
         } else {
-          setErrorMessage(data?.message || 'Unable to join this meeting');
-          setPhase('error');
+          setErrorMessage(data?.message || "Unable to join this meeting");
+          setPhase("error");
         }
       }
     },
-    [meetingId]
+    [meetingId],
   );
 
   useEffect(() => {
@@ -91,37 +95,46 @@ const MeetingRoom = () => {
 
   // Step 2: Get local media once REST join succeeds
   useEffect(() => {
-    if (phase === 'media') {
-      initLocalMedia().finally(() => setPhase('connecting'));
+    if (phase === "media") {
+      initLocalMedia().finally(() => setPhase("connecting"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Step 3: Join the Socket.IO room once socket is connected and media is ready
+  // Step 3: Join (or rejoin) the Socket.IO room whenever the socket
+  // connects. This runs on the initial connect and also on every
+  // automatic reconnect (e.g. after a brief network drop or the backend
+  // restarting), so the call self-heals instead of staying broken forever
+  // once the underlying signaling connection blips.
   useEffect(() => {
-    if (phase !== 'connecting' || !connected || hasJoinedSocketRoom.current) return;
+    if ((phase !== "connecting" && phase !== "active") || !connected) return;
 
-    hasJoinedSocketRoom.current = true;
+    // Any peer connections from before a disconnect are now stale (the
+    // remote side already tore down its side when our old socket dropped),
+    // so clear them before rejoining and re-negotiating fresh connections.
+    closeAllPeerConnections();
 
-    emit('join-meeting', { meetingId }, (res) => {
+    emit("join-meeting", { meetingId }, (res) => {
       if (!res?.success) {
-        setErrorMessage(res?.message || 'Could not connect to the meeting room');
-        setPhase('error');
+        setErrorMessage(
+          res?.message || "Could not connect to the meeting room",
+        );
+        setPhase("error");
         return;
       }
 
       setIsHost(res.isHost);
       setParticipants(res.participants || []);
 
-      // We are the new joiner: initiate connections to everyone already present
+      // We are (re)joining: initiate connections to everyone already present
       (res.participants || []).forEach((p) => {
         callParticipant(p.socketId);
       });
 
-      setPhase('active');
+      setPhase("active");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, connected]);
+  }, [connected]);
 
   // Step 4: Wire up all real-time socket event listeners
   useEffect(() => {
@@ -147,25 +160,31 @@ const MeetingRoom = () => {
 
     const onMicToggled = ({ socketId, micOn: state }) => {
       setParticipants((prev) =>
-        prev.map((p) => (p.socketId === socketId ? { ...p, micOn: state } : p))
+        prev.map((p) => (p.socketId === socketId ? { ...p, micOn: state } : p)),
       );
     };
 
     const onCameraToggled = ({ socketId, cameraOn: state }) => {
       setParticipants((prev) =>
-        prev.map((p) => (p.socketId === socketId ? { ...p, cameraOn: state } : p))
+        prev.map((p) =>
+          p.socketId === socketId ? { ...p, cameraOn: state } : p,
+        ),
       );
     };
 
     const onScreenShareToggled = ({ socketId, screenSharing }) => {
       setParticipants((prev) =>
-        prev.map((p) => (p.socketId === socketId ? { ...p, screenSharing } : p))
+        prev.map((p) =>
+          p.socketId === socketId ? { ...p, screenSharing } : p,
+        ),
       );
     };
 
     const onHandToggled = ({ socketId, handRaised: state }) => {
       setParticipants((prev) =>
-        prev.map((p) => (p.socketId === socketId ? { ...p, handRaised: state } : p))
+        prev.map((p) =>
+          p.socketId === socketId ? { ...p, handRaised: state } : p,
+        ),
       );
     };
 
@@ -183,44 +202,44 @@ const MeetingRoom = () => {
 
     const onRemoved = () => {
       closeAllPeerConnections();
-      setPhase('ended');
-      setErrorMessage('You were removed from this meeting by the host.');
+      setPhase("ended");
+      setErrorMessage("You were removed from this meeting by the host.");
     };
 
     const onMeetingEnded = () => {
       closeAllPeerConnections();
-      setPhase('ended');
-      setErrorMessage('The host has ended this meeting.');
+      setPhase("ended");
+      setErrorMessage("The host has ended this meeting.");
     };
 
-    socket.on('user-joined', onUserJoined);
-    socket.on('offer', onOffer);
-    socket.on('answer', onAnswer);
-    socket.on('ice-candidate', onIceCandidate);
-    socket.on('user-left', onUserLeft);
-    socket.on('participant-mic-toggled', onMicToggled);
-    socket.on('participant-camera-toggled', onCameraToggled);
-    socket.on('participant-screen-share-toggled', onScreenShareToggled);
-    socket.on('participant-hand-toggled', onHandToggled);
-    socket.on('receive-message', onReceiveMessage);
-    socket.on('force-mute', onForceMute);
-    socket.on('removed-from-meeting', onRemoved);
-    socket.on('meeting-ended', onMeetingEnded);
+    socket.on("user-joined", onUserJoined);
+    socket.on("offer", onOffer);
+    socket.on("answer", onAnswer);
+    socket.on("ice-candidate", onIceCandidate);
+    socket.on("user-left", onUserLeft);
+    socket.on("participant-mic-toggled", onMicToggled);
+    socket.on("participant-camera-toggled", onCameraToggled);
+    socket.on("participant-screen-share-toggled", onScreenShareToggled);
+    socket.on("participant-hand-toggled", onHandToggled);
+    socket.on("receive-message", onReceiveMessage);
+    socket.on("force-mute", onForceMute);
+    socket.on("removed-from-meeting", onRemoved);
+    socket.on("meeting-ended", onMeetingEnded);
 
     return () => {
-      socket.off('user-joined', onUserJoined);
-      socket.off('offer', onOffer);
-      socket.off('answer', onAnswer);
-      socket.off('ice-candidate', onIceCandidate);
-      socket.off('user-left', onUserLeft);
-      socket.off('participant-mic-toggled', onMicToggled);
-      socket.off('participant-camera-toggled', onCameraToggled);
-      socket.off('participant-screen-share-toggled', onScreenShareToggled);
-      socket.off('participant-hand-toggled', onHandToggled);
-      socket.off('receive-message', onReceiveMessage);
-      socket.off('force-mute', onForceMute);
-      socket.off('removed-from-meeting', onRemoved);
-      socket.off('meeting-ended', onMeetingEnded);
+      socket.off("user-joined", onUserJoined);
+      socket.off("offer", onOffer);
+      socket.off("answer", onAnswer);
+      socket.off("ice-candidate", onIceCandidate);
+      socket.off("user-left", onUserLeft);
+      socket.off("participant-mic-toggled", onMicToggled);
+      socket.off("participant-camera-toggled", onCameraToggled);
+      socket.off("participant-screen-share-toggled", onScreenShareToggled);
+      socket.off("participant-hand-toggled", onHandToggled);
+      socket.off("receive-message", onReceiveMessage);
+      socket.off("force-mute", onForceMute);
+      socket.off("removed-from-meeting", onRemoved);
+      socket.off("meeting-ended", onMeetingEnded);
     };
   }, [
     socketRef,
@@ -240,11 +259,11 @@ const MeetingRoom = () => {
   const handleToggleHand = () => {
     const newState = !handRaised;
     setHandRaised(newState);
-    emit('toggle-hand', { handRaised: newState });
+    emit("toggle-hand", { handRaised: newState });
   };
 
   const handleSendMessage = (text) => {
-    emit('send-message', { text });
+    emit("send-message", { text });
   };
 
   const handleOpenChat = () => {
@@ -259,30 +278,30 @@ const MeetingRoom = () => {
   };
 
   const handleMuteParticipant = (socketId) => {
-    emit('mute-participant', { socketId });
+    emit("mute-participant", { socketId });
   };
 
   const handleRemoveParticipant = (socketId) => {
-    emit('remove-participant', { socketId });
+    emit("remove-participant", { socketId });
   };
 
   const handleLeave = () => {
-    emit('leave-meeting');
+    emit("leave-meeting");
     closeAllPeerConnections();
-    navigate('/dashboard');
+    navigate("/dashboard");
   };
 
   const handleEndMeeting = () => {
-    emit('end-meeting');
+    emit("end-meeting");
   };
 
   // ---------- Render states ----------
 
-  if (phase === 'loading' || phase === 'joining') {
+  if (phase === "loading" || phase === "joining") {
     return <LoadingSpinner fullScreen label="Joining meeting..." />;
   }
 
-  if (phase === 'password') {
+  if (phase === "password") {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-[rgb(var(--color-bg))]">
         <div className="card w-full max-w-sm p-6 animate-fade-in">
@@ -313,7 +332,7 @@ const MeetingRoom = () => {
     );
   }
 
-  if (phase === 'error' || phase === 'ended') {
+  if (phase === "error" || phase === "ended") {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-[rgb(var(--color-bg))]">
         <div className="card w-full max-w-sm p-6 text-center animate-fade-in">
@@ -321,12 +340,15 @@ const MeetingRoom = () => {
             <HiX className="text-red-600 text-xl" />
           </div>
           <h1 className="text-lg font-bold text-[rgb(var(--color-text-primary))]">
-            {phase === 'ended' ? 'Meeting ended' : 'Unable to join'}
+            {phase === "ended" ? "Meeting ended" : "Unable to join"}
           </h1>
           <p className="text-sm text-[rgb(var(--color-text-secondary))] mt-1">
             {errorMessage}
           </p>
-          <button onClick={() => navigate('/dashboard')} className="btn btn-primary w-full mt-5">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="btn btn-primary w-full mt-5"
+          >
             Back to Dashboard
           </button>
         </div>
@@ -334,8 +356,13 @@ const MeetingRoom = () => {
     );
   }
 
-  if (phase === 'media' || phase === 'connecting') {
-    return <LoadingSpinner fullScreen label="Setting up your camera and microphone..." />;
+  if (phase === "media" || phase === "connecting") {
+    return (
+      <LoadingSpinner
+        fullScreen
+        label="Setting up your camera and microphone..."
+      />
+    );
   }
 
   const remoteParticipants = participants.map((p) => ({
@@ -350,7 +377,7 @@ const MeetingRoom = () => {
         <div className="flex items-center gap-2 min-w-0">
           <HiVideoCamera className="text-nova-400 text-lg flex-shrink-0" />
           <span className="text-white font-semibold text-sm truncate max-w-[160px] sm:max-w-xs">
-            {meetingInfo?.title || 'NovaMeet'}
+            {meetingInfo?.title || "NovaMeet"}
           </span>
           <span className="text-slate-400 text-xs font-mono hidden sm:inline">
             {meetingId}
@@ -378,7 +405,7 @@ const MeetingRoom = () => {
           <VideoGrid
             localParticipant={{
               stream: localStream,
-              name: user?.name || 'You',
+              name: user?.name || "You",
               micOn,
               cameraOn,
               isHost,
